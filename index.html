@@ -1,11 +1,324 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NDT Tracker</title>
+  <style>
+    :root {
+      --border: #d7dbe0;
+      --header-bg: #f1f3f5;
+      --toolbar-bg: #f8f9fa;
+      --text: #1f2933;
+      --blue: #dbeafe;
+      --green: #dcfce7;
+      --yellow: #fef9c3;
+      --red: #fee2e2;
+      --white: #ffffff;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--text);
+      background: #f7f8fa;
+    }
+
+    .app {
+      width: 100%;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: #fff;
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.1rem;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 8px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--toolbar-bg);
+    }
+
+    .toolbar label {
+      display: flex;
+      flex-direction: column;
+      font-size: 12px;
+      gap: 4px;
+    }
+
+    .toolbar input,
+    .toolbar select,
+    .toolbar button {
+      height: 32px;
+      border: 1px solid #c7ccd3;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 13px;
+      background: #fff;
+    }
+
+    .toolbar button {
+      cursor: pointer;
+      font-weight: 600;
+      background: #e9ecef;
+    }
+
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      overflow-y: auto;
+      flex: 1;
+      background: #fff;
+    }
+
+    table {
+      border-collapse: collapse;
+      min-width: 2400px;
+      width: 100%;
+      font-size: 12px;
+    }
+
+    thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: var(--header-bg);
+      border: 1px solid var(--border);
+      padding: 6px;
+      text-align: left;
+      white-space: nowrap;
+      font-weight: 600;
+    }
+
+    tbody td {
+      border: 1px solid var(--border);
+      padding: 0;
+      min-width: 120px;
+      vertical-align: middle;
+    }
+
+    tbody tr { height: 32px; }
+    tbody td input,
+    tbody td select {
+      width: 100%;
+      height: 30px;
+      border: none;
+      background: transparent;
+      padding: 4px 6px;
+      font-size: 12px;
+      outline: none;
+    }
+
+    tfoot {
+      border-top: 1px solid var(--border);
+      text-align: center;
+      padding: 10px;
+      background: #fff;
+      font-size: 12px;
+      color: #5a6675;
+    }
+  </style>
 </head>
 <body>
-  <h1>NDT Tracker – Chevron El Segundo</h1>
-  <p>Version 1 setup complete.</p>
+  <div class="app">
+    <header>
+      <h1>NDT Tracker – Chevron El Segundo (Version 1)</h1>
+    </header>
+
+    <section class="toolbar">
+      <label>Technician Filter
+        <select id="filterTechnician"><option value="">All</option></select>
+      </label>
+      <label>NDE Method Filter
+        <select id="filterMethod"><option value="">All</option></select>
+      </label>
+      <label>Accessibility Filter
+        <select id="filterAccessibility"><option value="">All</option></select>
+      </label>
+      <label>Project Category Filter
+        <select id="filterCategory"><option value="">All</option></select>
+      </label>
+      <label>On-Hold Filter
+        <select id="filterOnHold"><option value="">All</option><option>Yes</option><option>No</option></select>
+      </label>
+      <label>Search (Drawing #, Unit, Comments)
+        <input id="searchBox" type="text" placeholder="Type to search..." />
+      </label>
+      <label>&nbsp;
+        <button id="addRowBtn" type="button">Add Row</button>
+      </label>
+      <label>&nbsp;
+        <button id="deleteRowBtn" type="button">Delete Row</button>
+      </label>
+    </section>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr id="headerRow"></tr></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+
+    <tfoot>Powered by UWC</tfoot>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'ndtTrackerV1Rows';
+    const columns = [
+      'Turn In To Client','Date Turned In','Tech Report Complete','Technician','Request #','Date Assigned',
+      'Date Field Completed','Unit','Drawing #','Due Date','NDE Method','CML ID','On-Hold',
+      'Accessibility','Walk-Down','Date Received','Project Category','Description','Comments','OneDrive Link'
+    ];
+
+    const yesNoColumns = ['Turn In To Client', 'Tech Report Complete', 'On-Hold'];
+    const body = document.getElementById('tableBody');
+    const headerRow = document.getElementById('headerRow');
+    const filters = {
+      tech: document.getElementById('filterTechnician'),
+      method: document.getElementById('filterMethod'),
+      accessibility: document.getElementById('filterAccessibility'),
+      category: document.getElementById('filterCategory'),
+      onHold: document.getElementById('filterOnHold'),
+      search: document.getElementById('searchBox')
+    };
+
+    let rows = loadRows();
+    let selectedRowIndex = null;
+
+    function makeBlankRow() {
+      return Object.fromEntries(columns.map(c => [c, '']));
+    }
+
+    function loadRows() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) return [makeBlankRow()];
+      try {
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) && parsed.length ? parsed : [makeBlankRow()];
+      } catch {
+        return [makeBlankRow()];
+      }
+    }
+
+    function saveRows() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
+    }
+
+    function getRowColor(row) {
+      if ((row['On-Hold'] || '').toLowerCase() === 'yes') return 'var(--red)';
+      if ((row['Turn In To Client'] || '').toLowerCase() === 'yes') return 'var(--green)';
+      if ((row['Tech Report Complete'] || '').toLowerCase() === 'yes') return 'var(--yellow)';
+      if ((row['Technician'] || '').trim() && (row['Date Assigned'] || '').trim()) return 'var(--blue)';
+      return 'var(--white)';
+    }
+
+    function rowMatchesFilters(row) {
+      const checks = [
+        !filters.tech.value || row['Technician'] === filters.tech.value,
+        !filters.method.value || row['NDE Method'] === filters.method.value,
+        !filters.accessibility.value || row['Accessibility'] === filters.accessibility.value,
+        !filters.category.value || row['Project Category'] === filters.category.value,
+        !filters.onHold.value || row['On-Hold'] === filters.onHold.value
+      ];
+      const q = filters.search.value.trim().toLowerCase();
+      const inSearch = !q || ['Drawing #', 'Unit', 'Comments'].some(k => (row[k] || '').toLowerCase().includes(q));
+      return checks.every(Boolean) && inSearch;
+    }
+
+    function refreshFilterOptions() {
+      const map = {
+        tech: 'Technician', method: 'NDE Method', accessibility: 'Accessibility', category: 'Project Category'
+      };
+      Object.entries(map).forEach(([id, key]) => {
+        const select = filters[id];
+        const current = select.value;
+        const options = [...new Set(rows.map(r => r[key]).filter(Boolean))].sort();
+        select.innerHTML = '<option value="">All</option>' + options.map(v => `<option>${v}</option>`).join('');
+        select.value = options.includes(current) ? current : '';
+      });
+    }
+
+    function renderHeader() {
+      headerRow.innerHTML = '<th>Select</th>' + columns.map(c => `<th>${c}</th>`).join('');
+    }
+
+    function render() {
+      refreshFilterOptions();
+      body.innerHTML = '';
+      rows.forEach((row, index) => {
+        if (!rowMatchesFilters(row)) return;
+        const tr = document.createElement('tr');
+        tr.style.background = getRowColor(row);
+
+        const selectTd = document.createElement('td');
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'selectedRow';
+        radio.checked = selectedRowIndex === index;
+        radio.addEventListener('change', () => { selectedRowIndex = index; });
+        selectTd.appendChild(radio);
+        tr.appendChild(selectTd);
+
+        columns.forEach(col => {
+          const td = document.createElement('td');
+          const isYesNo = yesNoColumns.includes(col);
+          const input = document.createElement(isYesNo ? 'select' : 'input');
+          if (isYesNo) {
+            input.innerHTML = '<option value=""></option><option>Yes</option><option>No</option>';
+          } else if (col.toLowerCase().includes('date')) {
+            input.type = 'date';
+          } else {
+            input.type = 'text';
+          }
+          input.value = row[col] || '';
+          input.addEventListener('input', (e) => {
+            rows[index][col] = e.target.value;
+            saveRows();
+            if (['On-Hold', 'Turn In To Client', 'Tech Report Complete', 'Technician', 'Date Assigned'].includes(col)) {
+              render();
+            }
+          });
+          td.appendChild(input);
+          tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      });
+    }
+
+    document.getElementById('addRowBtn').addEventListener('click', () => {
+      rows.push(makeBlankRow());
+      saveRows();
+      render();
+    });
+
+    document.getElementById('deleteRowBtn').addEventListener('click', () => {
+      if (selectedRowIndex === null || selectedRowIndex >= rows.length) return;
+      rows.splice(selectedRowIndex, 1);
+      if (!rows.length) rows.push(makeBlankRow());
+      selectedRowIndex = null;
+      saveRows();
+      render();
+    });
+
+    Object.values(filters).forEach(el => el.addEventListener('input', render));
+
+    renderHeader();
+    render();
+  </script>
 </body>
 </html>
