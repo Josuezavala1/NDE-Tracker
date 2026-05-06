@@ -84,6 +84,9 @@
       overflow-y: auto;
       flex: 1;
       background: #fff;
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-x: contain;
     }
 
     table {
@@ -113,6 +116,12 @@
     }
 
     tbody tr { height: 32px; }
+    tbody tr:nth-child(even) td {
+      background-color: rgba(15, 23, 42, 0.02);
+    }
+    tbody tr:hover td {
+      box-shadow: inset 0 0 0 9999px rgba(30, 64, 175, 0.12);
+    }
     tbody td input,
     tbody td select {
       width: 100%;
@@ -181,9 +190,19 @@
     const STORAGE_KEY = 'ndtTrackerV1Rows';
     const columns = [
       'Turn In To Client','Date Turned In','Tech Report Complete','Technician','Request #','Date Assigned',
-      'Date Field Completed','Unit','Drawing #','Due Date','NDE Method','CML ID','On-Hold',
-      'Accessibility','Walk-Down','Date Received','Project Category','Description','Comments','OneDrive Link'
+      'Date Field Completed','Unit','Drawing #','OneDrive Link','Due Date','NDE Method','CML ID','On-Hold',
+      'Accessibility','Walk-Down','Date Received','Project Category','Description','Comments'
     ];
+    const columnSizing = {
+      'Unit': '80px',
+      'NDE Method': '95px',
+      'CML ID': '95px',
+      'On-Hold': '85px',
+      'Walk-Down': '95px',
+      'Description': '250px',
+      'Comments': '400px',
+      'OneDrive Link': '220px'
+    };
 
     const yesNoColumns = ['Turn In To Client', 'Tech Report Complete', 'On-Hold'];
     const body = document.getElementById('tableBody');
@@ -254,7 +273,12 @@
     }
 
     function renderHeader() {
-      headerRow.innerHTML = '<th>Select</th>' + columns.map(c => `<th>${c}</th>`).join('');
+      const selectWidth = '62px';
+      headerRow.innerHTML = '<th style="min-width: ' + selectWidth + '; width: ' + selectWidth + ';">Select</th>' +
+        columns.map(c => {
+          const width = columnSizing[c] || '120px';
+          return `<th style="min-width:${width};width:${width};">${c}</th>`;
+        }).join('');
     }
 
     function render() {
@@ -266,6 +290,8 @@
         tr.style.background = getRowColor(row);
 
         const selectTd = document.createElement('td');
+        selectTd.style.minWidth = '62px';
+        selectTd.style.width = '62px';
         const radio = document.createElement('input');
         radio.type = 'radio';
         radio.name = 'selectedRow';
@@ -276,6 +302,9 @@
 
         columns.forEach(col => {
           const td = document.createElement('td');
+          const width = columnSizing[col] || '120px';
+          td.style.minWidth = width;
+          td.style.width = width;
           const isYesNo = yesNoColumns.includes(col);
           const input = document.createElement(isYesNo ? 'select' : 'input');
           if (isYesNo) {
